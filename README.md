@@ -11,6 +11,7 @@ La prima web app di Stefano, fatta con Claude (app desktop) il 27 aprile 2026: i
 
 - Tre tendine: battistrada, poi spalla, poi diametro. Il diametro mostra solo i valori che esistono per quella combinazione.
 - «Cerca canali» (o Invio) mostra i canali ammessi, con la lettera del bordo (J, B) e il simbolo ½ come nel file originale.
+- Scheda «Da ruota a gomma» (dal 2026-11-26): ricerca inversa. Si sceglie il diametro e poi il canale (solo quelli che esistono per quel diametro) e compaiono le misure di pneumatico ammesse, raggruppate per serie (/75 … /30). Gli stessi dati letti al contrario, calcolati nel browser. Avviso fisso: ammessa ETRTO non vuol dire omologata a libretto.
 
 ## Dati
 

@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Canali ETRTO">
 <meta name="build" content="/*BUILD*/">
 <link rel="apple-touch-icon" href="assets/mak.png">
-<title>ETRTO — Canali compatibili</title>
+<title>ETRTO — Canali e misure compatibili</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -229,8 +229,65 @@
 
   .footer strong { color: var(--text-muted); }
 
+  .tabs {
+    display: flex;
+    background: #e9e7e1;
+    border-radius: var(--radius-sm);
+    padding: 3px;
+    margin-bottom: 1rem;
+  }
+  .tabs input { position: absolute; opacity: 0; pointer-events: none; }
+  .tabs label {
+    flex: 1;
+    text-align: center;
+    padding: 9px 4px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-muted);
+    border-radius: 5px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .tabs input:checked + label {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+  }
+
+  .input-grid.two { grid-template-columns: repeat(2, 1fr); }
+
+  .serie-row {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    gap: 10px;
+    align-items: start;
+    padding: 9px 0;
+    border-top: 0.5px solid var(--border);
+  }
+  .serie-row:first-child { border-top: none; }
+  .serie-label {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--accent-text);
+    padding-top: 5px;
+  }
+  .serie-row .canali-grid { gap: 6px; }
+  .serie-row .canale-pill { padding: 5px 12px; }
+
+  .note {
+    margin-top: 1rem;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: #7B5800;
+    background: #FFF8E1;
+    border: 0.5px solid #FFE082;
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+  }
+
   @media (max-width: 420px) {
     .input-grid { grid-template-columns: 1fr; }
+    .input-grid.two { grid-template-columns: 1fr 1fr; }
     .preview { font-size: 22px; }
   }
 </style>
@@ -241,9 +298,16 @@
 
   <div class="logo">MAK 2026 — Strumenti tecnici</div>
   <h1>Canali compatibili ETRTO</h1>
-  <p class="subtitle">Inserisci la misura del pneumatico per trovare i canali ammessi secondo la tabella ETRTO.</p>
+  <p class="subtitle" id="subtitle">Inserisci la misura del pneumatico per trovare i canali ammessi secondo la tabella ETRTO.</p>
 
-  <div class="card">
+  <div class="tabs">
+    <input type="radio" name="modo" id="modo-gomma" value="gomma" checked>
+    <label for="modo-gomma">Da gomma a canale</label>
+    <input type="radio" name="modo" id="modo-ruota" value="ruota">
+    <label for="modo-ruota">Da ruota a gomma</label>
+  </div>
+
+  <div class="card" id="panel-gomma">
     <div class="input-grid">
       <div class="field">
         <label>Battistrada (mm)</label>
@@ -266,6 +330,27 @@
     <button class="btn" onclick="cerca()">Cerca canali</button>
 
     <div class="result-area" id="result-area" style="display:none;"></div>
+  </div>
+
+  <div class="card" id="panel-ruota" style="display:none;">
+    <div class="input-grid two">
+      <div class="field">
+        <label>Diametro (pollici)</label>
+        <select id="inv-d"><option value="">—</option></select>
+      </div>
+      <div class="field">
+        <label>Canale</label>
+        <select id="inv-c"><option value="">—</option></select>
+      </div>
+    </div>
+
+    <div class="preview" id="inv-preview">
+      <span class="sep">— × — R —</span>
+    </div>
+
+    <div class="result-area" id="inv-result" style="display:none;"></div>
+
+    <div class="note">Misure che la tabella ETRTO ammette su questo canale. Non vuol dire che l'abbinamento sia omologato a libretto: va verificato sulla carta di circolazione o con la NAD.</div>
   </div>
 
   <div class="footer">Database ETRTO &nbsp;·&nbsp; <strong>684</strong> misure &nbsp;·&nbsp; MAK 2026</div>
@@ -328,7 +413,74 @@ function cerca(){
   ra.innerHTML=`<div class="result-header"><span class="result-label">Canali compatibili</span><span class="count-badge">${canali.length}</span></div><div class="canali-grid">${pills}</div>`;
 }
 
-document.addEventListener('keydown', e=>{ if(e.key==='Enter') cerca(); });
+// ---- Ricerca inversa: diametro + canale -> misure ammesse ----
+function canaleNum(c){
+  const m=c.match(/^(\d+)(½)?(?:[.,](\d+))?/);
+  if(!m) return 999;
+  return Number(m[1])+(m[2]?0.5:0)+(m[3]?Number('0.'+m[3]):0);
+}
+function canaleSort(a,b){ return canaleNum(a)-canaleNum(b) || a.localeCompare(b); }
+
+const INV={};   // "diametro" -> { canale: [[battistrada, spalla], ...] }
+allKeys.forEach(k=>{
+  const [b,s,d]=k.split('_');
+  DATA[k].forEach(c=>{
+    INV[d]=INV[d]||{};
+    (INV[d][c]=INV[d][c]||[]).push([Number(b),Number(s)]);
+  });
+});
+
+function fillSelect(sel, values){
+  sel.innerHTML='<option value="">—</option>';
+  values.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;sel.appendChild(o);});
+}
+
+function mostraInversa(){
+  const d=document.getElementById('inv-d').value, c=document.getElementById('inv-c').value;
+  const pv=document.getElementById('inv-preview'), ra=document.getElementById('inv-result');
+  pv.innerHTML = d
+    ? `<strong>${c||'—'}</strong><span class="sep"> × </span><span class="r-label">R</span><strong>${d}</strong>`
+    : '<span class="sep">— × — R —</span>';
+  if(!d||!c){ ra.style.display='none'; return; }
+  const misure=(INV[d]||{})[c]||[];
+  const perSerie={};
+  misure.forEach(([b,s])=>{(perSerie[s]=perSerie[s]||[]).push(b);});
+  const righe=Object.keys(perSerie).map(Number).sort((a,b)=>b-a).map(s=>{
+    const pills=perSerie[s].sort((a,b)=>a-b).map(b=>`<div class="canale-pill">${b}/${s}</div>`).join('');
+    return `<div class="serie-row"><div class="serie-label">/${s}</div><div class="canali-grid">${pills}</div></div>`;
+  }).join('');
+  ra.style.display='block';
+  ra.innerHTML=`<div class="result-header"><span class="result-label">Misure ammesse</span><span class="count-badge">${misure.length}</span></div>${righe}`;
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  const invD=document.getElementById('inv-d'), invC=document.getElementById('inv-c');
+  fillSelect(invD, Object.keys(INV).map(Number).sort((a,b)=>a-b));
+  invD.addEventListener('change', ()=>{
+    const prima=invC.value;
+    const canali=invD.value ? Object.keys(INV[invD.value]).sort(canaleSort) : [];
+    fillSelect(invC, canali);
+    if(canali.includes(prima)) invC.value=prima;
+    mostraInversa();
+  });
+  invC.addEventListener('change', mostraInversa);
+
+  const sub=document.getElementById('subtitle');
+  const testi={
+    gomma:"Inserisci la misura del pneumatico per trovare i canali ammessi secondo la tabella ETRTO.",
+    ruota:"Scegli diametro e canale della ruota per vedere quali misure di pneumatico ammette la tabella ETRTO."
+  };
+  document.querySelectorAll('input[name="modo"]').forEach(r=>r.addEventListener('change', ()=>{
+    const m=document.querySelector('input[name="modo"]:checked').value;
+    document.getElementById('panel-gomma').style.display = m==='gomma' ? '' : 'none';
+    document.getElementById('panel-ruota').style.display = m==='ruota' ? '' : 'none';
+    sub.textContent=testi[m];
+  }));
+});
+
+document.addEventListener('keydown', e=>{
+  if(e.key==='Enter' && document.getElementById('modo-gomma').checked) cerca();
+});
 </script>
 
 </body>
